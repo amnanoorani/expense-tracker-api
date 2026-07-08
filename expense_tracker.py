@@ -1,6 +1,28 @@
 import datetime
+import psycopg2
 
-expenses = []
+# --- Database connection settings ---
+DB_NAME = "expense_tracker"
+DB_USER = "postgres"
+DB_PASSWORD = "amna123"   
+DB_HOST = "localhost"
+DB_PORT = "5432"
+
+
+def get_connection():
+    try:
+        conn = psycopg2.connect(
+            dbname=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            host=DB_HOST,
+            port=DB_PORT
+        )
+        return conn
+    except Exception as e:
+        print(f"Could not connect to database: {e}")
+        return None
+
 
 def show_menu():
     print("\nEXPENSE TRACKER")
@@ -11,6 +33,7 @@ def show_menu():
     print("5. View Summary")
     print("6. View Monthly Summary")
     print("7. Exit")
+
 
 def add_expense():
     print("\n--- Add New Expense ---")
@@ -41,13 +64,43 @@ def add_expense():
             print(f"Error while reading date: {e}")
             print("Please enter the date in YYYY-MM-DD format (e.g. 2026-07-05)")
 
-    expense = [description, amount, date]
-    expenses.append(expense)
+    conn = get_connection()
+    if conn is None:
+        return
 
-    print(f"Expense added: {description} - {amount}")
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO expenses (description, amount, date) VALUES (%s, %s, %s)",
+            (description, amount, date)
+        )
+        conn.commit()
+        cur.close()
+        print(f"Expense added: {description} - {amount}")
+    except Exception as e:
+        print(f"Error while saving expense: {e}")
+    finally:
+        conn.close()
+
 
 def view_expenses():
-    if len(expenses) == 0:
+    conn = get_connection()
+    if conn is None:
+        return
+
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id, description, amount, date FROM expenses ORDER BY id")
+        rows = cur.fetchall()
+        cur.close()
+    except Exception as e:
+        print(f"Error while fetching expenses: {e}")
+        conn.close()
+        return
+
+    conn.close()
+
+    if len(rows) == 0:
         print("\nNo expenses found!")
         return
 
@@ -55,26 +108,19 @@ def view_expenses():
     print("#   Date        Description          Amount")
 
     total = 0
-    try:
-        for i in range(len(expenses)):
-            expense = expenses[i]
-            print(f"{i+1}   {expense[2]}   {expense[0]}   {expense[1]}")
-            total = total + expense[1]
-    except Exception as e:
-        print(f"Error while showing expenses: {e}")
-        return
+    for row in rows:
+        expense_id, description, amount, date = row
+        print(f"{expense_id}   {date}   {description}   {amount}")
+        total = total + float(amount)
 
     print(f"TOTAL: {total}")
 
-def update_expense():
-    if len(expenses) == 0:
-        print("\nNo expenses to update!")
-        return
 
+def update_expense():
     view_expenses()
 
     try:
-        index = int(input("\nEnter expense number to update: ")) - 1
+        expense_id = int(input("\nEnter expense # to update: "))
     except ValueError:
         print("Please enter a valid number!")
         return
@@ -82,53 +128,73 @@ def update_expense():
         print(f"Error: {e}")
         return
 
-    if index < 0 or index >= len(expenses):
-        print("Invalid number!")
+    conn = get_connection()
+    if conn is None:
         return
 
     try:
-        expense = expenses[index]
-        print(f"\nUpdating: {expense[0]} - {expense[1]}")
+        cur = conn.cursor()
+        cur.execute("SELECT description, amount, date FROM expenses WHERE id = %s", (expense_id,))
+        row = cur.fetchone()
+
+        if row is None:
+            print("Invalid expense number!")
+            cur.close()
+            conn.close()
+            return
+
+        description, amount, date = row
+        print(f"\nUpdating: {description} - {amount}")
         print("Press Enter to keep current value")
 
-        new_desc = input(f"New description (current: {expense[0]}): ")
-        if new_desc != "":
-            expense[0] = new_desc
+        new_desc = input(f"New description (current: {description}): ")
+        if new_desc == "":
+            new_desc = description
 
-        new_amount = input(f"New amount (current: {expense[1]}): ")
-        if new_amount != "":
+        new_amount_input = input(f"New amount (current: {amount}): ")
+        if new_amount_input == "":
+            new_amount = amount
+        else:
             try:
-                amount = float(new_amount)
-                if amount > 0:
-                    expense[1] = amount
-                else:
+                new_amount = float(new_amount_input)
+                if new_amount <= 0:
                     print("Amount must be positive! Keeping old value.")
+                    new_amount = amount
             except ValueError:
                 print("Invalid amount! Keeping old value.")
+                new_amount = amount
 
-        new_date = input(f"New date (current: {expense[2]}): ")
-        if new_date != "":
+        new_date_input = input(f"New date (current: {date}): ")
+        if new_date_input == "":
+            new_date = date
+        else:
             try:
-                datetime.datetime.strptime(new_date, "%Y-%m-%d")
-                expense[2] = new_date
+                datetime.datetime.strptime(new_date_input, "%Y-%m-%d")
+                new_date = new_date_input
             except ValueError as e:
                 print(f"Error while reading date: {e}")
                 print("Keeping old date.")
+                new_date = date
 
+        cur.execute(
+            "UPDATE expenses SET description = %s, amount = %s, date = %s WHERE id = %s",
+            (new_desc, new_amount, new_date, expense_id)
+        )
+        conn.commit()
+        cur.close()
         print("Expense updated successfully!")
 
     except Exception as e:
         print(f"Error while updating expense: {e}")
+    finally:
+        conn.close()
+
 
 def delete_expense():
-    if len(expenses) == 0:
-        print("\nNo expenses to delete!")
-        return
-
     view_expenses()
 
     try:
-        index = int(input("\nEnter expense number to delete: ")) - 1
+        expense_id = int(input("\nEnter expense # to delete: "))
     except ValueError:
         print("Please enter a valid number!")
         return
@@ -136,47 +202,70 @@ def delete_expense():
         print(f"Error: {e}")
         return
 
-    if index < 0 or index >= len(expenses):
-        print("Invalid number!")
+    conn = get_connection()
+    if conn is None:
         return
 
     try:
-        expense = expenses[index]
-        confirm = input(f"Delete '{expense[0]}'? (y/n): ")
+        cur = conn.cursor()
+        cur.execute("SELECT description FROM expenses WHERE id = %s", (expense_id,))
+        row = cur.fetchone()
+
+        if row is None:
+            print("Invalid expense number!")
+            cur.close()
+            conn.close()
+            return
+
+        description = row[0]
+        confirm = input(f"Delete '{description}'? (y/n): ")
 
         if confirm.lower() == "y":
-            expenses.pop(index)
+            cur.execute("DELETE FROM expenses WHERE id = %s", (expense_id,))
+            conn.commit()
             print("Expense deleted!")
         else:
             print("Deletion cancelled.")
 
+        cur.close()
+
     except Exception as e:
         print(f"Error while deleting expense: {e}")
+    finally:
+        conn.close()
+
 
 def view_summary():
-    if len(expenses) == 0:
-        print("\nNo expenses to summarize!")
+    conn = get_connection()
+    if conn is None:
         return
 
     try:
-        total = 0
-        for expense in expenses:
-            total = total + expense[1]
-
-        average = total / len(expenses)
-
-        print("\nEXPENSE SUMMARY")
-        print(f"Total Expenses: {len(expenses)}")
-        print(f"Total Amount:   {total}")
-        print(f"Average:        {average}")
+        cur = conn.cursor()
+        cur.execute("SELECT amount FROM expenses")
+        rows = cur.fetchall()
+        cur.close()
     except Exception as e:
         print(f"Error while calculating summary: {e}")
+        conn.close()
+        return
 
-def view_monthly_summary():
-    if len(expenses) == 0:
+    conn.close()
+
+    if len(rows) == 0:
         print("\nNo expenses to summarize!")
         return
 
+    total = sum(float(r[0]) for r in rows)
+    average = total / len(rows)
+
+    print("\nEXPENSE SUMMARY")
+    print(f"Total Expenses: {len(rows)}")
+    print(f"Total Amount:   {total}")
+    print(f"Average:        {average}")
+
+
+def view_monthly_summary():
     try:
         month = int(input("Enter month (1-12): "))
         if month < 1 or month > 12:
@@ -189,36 +278,40 @@ def view_monthly_summary():
         print(f"Error: {e}")
         return
 
-    month_expenses = []
-    total = 0
-
-    try:
-        for expense in expenses:
-            date_parts = expense[2].split("-")
-            if len(date_parts) >= 2:
-                try:
-                    expense_month = int(date_parts[1])
-                except ValueError:
-                    continue
-                if expense_month == month:
-                    month_expenses.append(expense)
-                    total = total + expense[1]
-    except Exception as e:
-        print(f"Error while reading expense dates: {e}")
+    conn = get_connection()
+    if conn is None:
         return
 
-    if len(month_expenses) == 0:
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT description, amount, date FROM expenses WHERE EXTRACT(MONTH FROM date) = %s ORDER BY date",
+            (month,)
+        )
+        rows = cur.fetchall()
+        cur.close()
+    except Exception as e:
+        print(f"Error while reading expense dates: {e}")
+        conn.close()
+        return
+
+    conn.close()
+
+    if len(rows) == 0:
         print(f"\nNo expenses found for month {month}")
         return
 
+    total = sum(float(r[1]) for r in rows)
+
     print(f"\nSUMMARY FOR MONTH {month}")
-    print(f"Number of expenses: {len(month_expenses)}")
+    print(f"Number of expenses: {len(rows)}")
     print(f"Total: {total}")
-    print(f"Average: {total / len(month_expenses)}")
+    print(f"Average: {total / len(rows)}")
 
     print("\nDetails:")
-    for expense in month_expenses:
-        print(f"{expense[2]} - {expense[0]}: {expense[1]}")
+    for description, amount, date in rows:
+        print(f"{date} - {description}: {amount}")
+
 
 def main():
     while True:
@@ -248,5 +341,6 @@ def main():
             print(f"\nOops! Something unexpected happened: {e}")
 
         input("\nPress Enter to continue...")
+
 
 main()
