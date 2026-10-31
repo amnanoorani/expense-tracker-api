@@ -1,22 +1,31 @@
 # Expense Tracker REST API
 
 ## Description
-A RESTful CRUD API built with FastAPI to manage financial expense records, migrating an existing command-line Python application into a scalable, multi-client web service. Developed during my Backend Developer Internship at Eurus Technologies.
+A RESTful CRUD API built with FastAPI to manage financial expense records, migrating an existing command-line Python application into a web service backed by PostgreSQL.
 
 ## Tech Stack
-Python, FastAPI, PostgreSQL, SQLAlchemy, Pydantic, psycopg2
+Python, FastAPI, PostgreSQL, Pydantic, psycopg2, Uvicorn
 
 ## Features
-- Full CRUD operations across multiple endpoints
-- Custom analytics endpoints for monthly and aggregate expense summaries using PostgreSQL date-extraction functions
-- Data integrity enforced through Pydantic schema validation (type checking, numeric constraints, malformed input rejection)
-- Secure database practices using SQLAlchemy ORM and parameterized SQL queries via psycopg2 (SQL injection prevention)
-- Layered architecture separating routing, request handlers, data models, and database access
-- Structured error handling with appropriate HTTP status codes (400, 404, 422, 500)
-- User registration/login, category-based expense organization, and JWT-based authentication for per-user data isolation
-- Tested via Swagger UI and Postman
+- Full CRUD operations for expenses
+- Aggregate summary endpoint (total and average)
+- Monthly summary endpoint
+- Request validation with Pydantic
+- Parameterized SQL queries to prevent SQL injection
+- Routes and handlers separated into different modules
 
+## Project Structure
+- `main.py`: API routes
+- `handlers.py`: request handlers (business logic)
+- `models.py`: Pydantic models
+- `database.py`: PostgreSQL connection
 
+## Setup
+1. Install dependencies: `pip install -r requirements.txt`
+2. Create a `.env` file with `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`
+3. Run the server: `uvicorn main:app --reload`
+4. Open the docs at `http://127.0.0.1:8000/docs`
 
-## Author
-Amna Bibi
+## Planned
+- User accounts with authentication
+- Expense categories
