@@ -16,8 +16,7 @@ Python, FastAPI, PostgreSQL, SQLAlchemy, Pydantic, psycopg2
 - User registration/login, category-based expense organization, and JWT-based authentication for per-user data isolation
 - Tested via Swagger UI and Postman
 
-## Status
-🚧 Code to be pushed soon
+
 
 ## Author
 Amna Bibi
